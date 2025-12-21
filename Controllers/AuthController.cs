@@ -6,7 +6,7 @@ using LoginRequest = Chatup.DTOs.LoginRequest;
 namespace Chatup.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/auth")]
 public class AuthController : ControllerBase
 {
     private readonly AuthService _authService; 
@@ -22,7 +22,6 @@ public class AuthController : ControllerBase
         await _authService.SendOtpAsync(request.PhoneNumber);
         return Ok(new { message = "OTP sent. Check server console." });
     }
-
 
     [HttpPost("verify")]
     public async Task<IActionResult> Verify([FromBody] VerifyOtpRequest request)

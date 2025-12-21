@@ -8,7 +8,7 @@ using MongoDB.Driver;
 namespace Chatup.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/users")]
 [Authorize]
 public class UsersController : ControllerBase
 {
