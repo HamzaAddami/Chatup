@@ -22,6 +22,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
 
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddControllers();
+builder.Services.AddScoped<UserService>();
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var key = Encoding.ASCII.GetBytes(jwtSettings["SecretKey"]!);
