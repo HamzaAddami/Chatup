@@ -41,6 +41,7 @@ public class UsersController : ControllerBase
             .Set(u => u.AvatarUrl, request.AvatarUrl);
         
         await _users.UpdateOneAsync(u => u.Id == myId, update);
+        
         return Ok();
     }
 
@@ -55,8 +56,14 @@ public class UsersController : ControllerBase
             return BadRequest(new { error = "User with this phone number not found." });
         }
 
+        if (contactUser.Id == myId)
+        {
+            return BadRequest(new { error = "You cannot add yourself as a contact." });
+        }
+
         var update = Builders<User>.Update.AddToSet(u => u.ContactIds, contactUser.Id);
         await _users.UpdateOneAsync(u => u.Id == myId, update);
+        
         return Ok();
     }
 
@@ -79,5 +86,60 @@ public class UsersController : ControllerBase
         );
 
         return Ok(response);
+    }
+
+    [HttpPost("block")]
+    public async Task<IActionResult> BlockUser([FromBody] BlockUserRequest request)
+    {
+        var myId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        var userToBlock = await _users.Find(u => u.PhoneNumber == request.PhoneNumber).FirstOrDefaultAsync();
+        if (userToBlock == null)
+        {
+            return BadRequest(new { error = "User with this phone number not found." });
+        }
+
+        if (userToBlock.Id == myId)
+        {
+            return BadRequest(new { error = "You cannot block yourself." });
+        }
+        
+        var update = Builders<User>.Update.AddToSet(u => u.BlockedUserIds, userToBlock.Id);
+        await _users.UpdateOneAsync(u => u.Id == myId, update);
+        
+        return Ok();
+    }
+
+    [HttpGet("blocked")]
+    public async Task<IActionResult> GetBlocked()
+    {
+        var myId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        var me = await _users.Find(u => u.Id == myId).FirstOrDefaultAsync();
+        if (me == null || me.BlockedUserIds.Count == 0) return Ok(new List<UserResponse>());
+
+        var filter = Builders<User>.Filter.In(u => u.Id, me.BlockedUserIds);
+
+        var blocked = await _users.Find(filter).ToListAsync();
+
+        var response = blocked.Select(u =>
+            new UserResponse(u.Id, u.PhoneNumber, u.Nickname, u.About, u.AvatarUrl)
+        );
+
+        return Ok(response);
+    }
+    
+    [HttpPost("unblock")]
+    public async Task<IActionResult> UnblockUser([FromBody] BlockUserRequest request)
+    {
+        var myId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userToBlock = await _users.Find(u => u.PhoneNumber == request.PhoneNumber).FirstOrDefaultAsync();
+        
+        if (userToBlock == null) return NotFound();
+
+        var update = Builders<User>.Update.Pull(u => u.BlockedUserIds, userToBlock.Id);
+        await _users.UpdateOneAsync(u => u.Id == myId, update);
+        
+        return Ok();
     }
 }
