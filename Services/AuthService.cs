@@ -33,8 +33,6 @@ public class AuthService
 
         await _redis.StringSetAsync($"otp:{phoneNumber}", code, TimeSpan.FromMinutes((5)));
 
-        await SendOtpSmsAsync(phoneNumber, code);
-
         Console.ForegroundColor = ConsoleColor.Yellow;
         Console.WriteLine($"\n===============================================");
         Console.WriteLine($"[DEV MODE] OTP for {phoneNumber}: {code}");
@@ -44,29 +42,6 @@ public class AuthService
        
     }
 
-    public async Task SendOtpSmsAsync(string phoneNumber, string otpCode) {
-
-        var apiInstance = new TransactionalSMSApi();
-        var senderName = "ChatUp";
-
-        var sms = new sib_api_v3_sdk.Model.SendTransacSms(
-        sender: senderName,
-        recipient: phoneNumber,
-        content: $"Your verification OTP : {otpCode}. Expires in 5 min"
-        );
-
-        try
-        {
-            await apiInstance.SendTransacSmsAsync(sms);
-            Console.WriteLine("[BREVO SMS] OTP sent successfully");
-        }
-        catch (ApiException e)
-        {
-            Console.WriteLine($"[BREVO SMS ERROR] {e.Message}");
-            throw new Exception("FAILED TO SEND OTP");
-        }
-
-    }
 
     public async Task<AuthResponse> VerifyOtpAsync(string phoneNumber, string code)
     {

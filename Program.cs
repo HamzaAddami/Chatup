@@ -24,8 +24,6 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
 // Brevo
 Configuration.Default.ApiKey.Add("api-key", builder.Configuration["Brevo:ApiKey"]);
 
-builder.Services.AddScoped<AuthService>();
-builder.Services.AddControllers();
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var key = Encoding.ASCII.GetBytes(jwtSettings["SecretKey"]!);
@@ -45,6 +43,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 
+builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<ConversationService>();
+builder.Services.AddScoped<MessageService>();
+builder.Services.AddControllers();
+builder.Services.AddSignalR();
+
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -60,5 +66,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.MapHub<Chatup.Hubs.ChatHub>("/hubs/chat");
 
 app.Run();
