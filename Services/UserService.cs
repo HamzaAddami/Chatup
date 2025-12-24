@@ -1,5 +1,6 @@
 using Chatup.DTOs;
 using Chatup.Entities;
+using MongoDB.Bson;
 using MongoDB.Driver;
 
 namespace Chatup.Services;
@@ -90,5 +91,19 @@ public class UserService
         await _users.UpdateOneAsync(u => u.Id == userId, update);
 
         return (true, "User unblocked successfully.");
+    }
+    
+    public async Task<List<UserResponse>> SearchUsersAsync(string query, string currentUserId)
+    {
+        var filter = Builders<User>.Filter.And(
+            Builders<User>.Filter.Ne(u => u.Id, currentUserId),
+            Builders<User>.Filter.Or(
+                Builders<User>.Filter.Regex(u => u.PhoneNumber, new BsonRegularExpression(query, "i")),
+                Builders<User>.Filter.Regex(u => u.Nickname, new BsonRegularExpression(query, "i"))
+            )
+        );
+
+        var users = await _users.Find(filter).Limit(20).ToListAsync();
+        return users.Select(u => new UserResponse(u.Id, u.PhoneNumber, u.Nickname, u.About, u.AvatarUrl)).ToList();
     }
 }
