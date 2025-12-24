@@ -85,11 +85,9 @@ public class MessageService
     public async Task<int> CountUnreadMessagesAsync(string conversationId, string userId)
     {
         var filter = Builders<Message>.Filter.And(
-            Builders<Message>.Filter.Eq(m => m.ConversationId, conversationId),
-            Builders<Message>.Filter.Ne(m => m.SenderId, userId),
-            Builders<Message>.Filter.Not(
-                Builders<Message>.Filter.AnyEq(m => m.ReadBy, userId)
-            )
+        Builders<Message>.Filter.Eq(m => m.ConversationId, conversationId),
+        Builders<Message>.Filter.Ne(m => m.SenderId, userId),
+        Builders<Message>.Filter.Not(Builders<Message>.Filter.AnyEq(m => m.ReadBy, userId))
         );
 
         return (int)await _messages.CountDocumentsAsync(filter);
