@@ -1,9 +1,17 @@
+<<<<<<< HEAD
 ﻿using System.Text;
+=======
+using System.Text;
+>>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be
 using Chatup.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using MongoDB.Driver;
+<<<<<<< HEAD
 using sib_api_v3_sdk.Client;
+=======
+using Scalar.AspNetCore;
+>>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +22,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+<<<<<<< HEAD
 var mongoClient = new MongoClient(builder.Configuration.GetConnectionString("MongoDb"));
 builder.Services.AddSingleton<IMongoDatabase>(mongoClient.GetDatabase("chatup"));
 
@@ -36,6 +45,17 @@ builder.Services.AddCors(options =>
     });
 });
 
+=======
+var mongoClient = new MongoClient(builder.Configuration.GetConnectionString("MongoDB"));
+builder.Services.AddSingleton<IMongoDatabase>(mongoClient.GetDatabase("chatup"));
+
+var redis = ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")!);
+builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
+
+builder.Services.AddScoped<AuthService>();
+builder.Services.AddControllers();
+builder.Services.AddScoped<UserService>();
+>>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var key = Encoding.ASCII.GetBytes(jwtSettings["SecretKey"]!);
@@ -52,6 +72,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidAudience = jwtSettings["Audience"]
         };
+<<<<<<< HEAD
 
         options.Events = new JwtBearerEvents
         {
@@ -79,6 +100,10 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 
 
+=======
+    });
+
+>>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be
 var app = builder.Build();
 
 
@@ -87,18 +112,31 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+
+    app.MapScalarApiReference(options =>
+    {
+        options.WithOpenApiRoutePattern("/swagger/v1/swagger.json");
+    });
 }
 
+<<<<<<< HEAD
 app.UseCors("CorsPolicy");
 // app.UseHttpsRedirection();
+=======
+app.UseHttpsRedirection();
+>>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 
+<<<<<<< HEAD
 app.MapHub<Chatup.Hubs.ChatHub>("/hubs/chat");
 
 
 
 app.Run();
+=======
+app.Run();
+>>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be

@@ -1,21 +1,41 @@
+<<<<<<< HEAD
 ﻿using Chatup.DTOs;
 using Chatup.Entities;
 using MongoDB.Driver;
 
+=======
+using Chatup.DTOs;
+using Chatup.Entities;
+using MongoDB.Bson;
+using MongoDB.Driver;
+
+namespace Chatup.Services;
+
+>>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be
 public class UserService
 {
     private readonly IMongoCollection<User> _users;
 
+<<<<<<< HEAD
     public UserService(IMongoDatabase db)
     {
         _users = db.GetCollection<User>("Users");
+=======
+    public UserService(IMongoDatabase database)
+    {
+        _users = database.GetCollection<User>("Users");
+>>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be
     }
 
     public async Task<UserResponse?> GetUserByIdAsync(string userId)
     {
         var user = await _users.Find(u => u.Id == userId).FirstOrDefaultAsync();
         if (user == null) return null;
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be
         return new UserResponse(user.Id, user.PhoneNumber, user.Nickname, user.About, user.AvatarUrl);
     }
 
@@ -32,7 +52,11 @@ public class UserService
     public async Task<(bool Success, string Message)> AddContactAsync(string userId, string contactPhoneNumber)
     {
         var contactUser = await _users.Find(u => u.PhoneNumber == contactPhoneNumber).FirstOrDefaultAsync();
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be
         if (contactUser == null) return (false, "User with this phone number not found.");
         if (contactUser.Id == userId) return (false, "You cannot add yourself as a contact.");
 
@@ -58,7 +82,11 @@ public class UserService
     public async Task<(bool Success, string Message)> BlockUserAsync(string userId, string blockPhoneNumber)
     {
         var userToBlock = await _users.Find(u => u.PhoneNumber == blockPhoneNumber).FirstOrDefaultAsync();
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be
         if (userToBlock == null) return (false, "User not found.");
         if (userToBlock.Id == userId) return (false, "You cannot block yourself.");
 
@@ -89,6 +117,7 @@ public class UserService
 
         return (true, "User unblocked successfully.");
     }
+<<<<<<< HEAD
 
     public async Task UpdateUserOnlineStatusAsync(string userId, bool isOnline)
     {
@@ -102,5 +131,20 @@ public class UserService
     public async Task<User> GetRawUserByIdAsync(string userId)
     {
         return await _users.Find(u => u.Id == userId).FirstOrDefaultAsync();
+=======
+    
+    public async Task<List<UserResponse>> SearchUsersAsync(string query, string currentUserId)
+    {
+        var filter = Builders<User>.Filter.And(
+            Builders<User>.Filter.Ne(u => u.Id, currentUserId),
+            Builders<User>.Filter.Or(
+                Builders<User>.Filter.Regex(u => u.PhoneNumber, new BsonRegularExpression(query, "i")),
+                Builders<User>.Filter.Regex(u => u.Nickname, new BsonRegularExpression(query, "i"))
+            )
+        );
+
+        var users = await _users.Find(filter).Limit(20).ToListAsync();
+        return users.Select(u => new UserResponse(u.Id, u.PhoneNumber, u.Nickname, u.About, u.AvatarUrl)).ToList();
+>>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be
     }
 }
