@@ -109,47 +109,69 @@ public class ChatHub : Hub
     }
 
     public async Task SendMessage(SendMessageRequest request)
+{
+    try
     {
-        try
+        var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (userId == null)
         {
-            var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (userId == null)
+            await Clients.Caller.SendAsync("Error", "Unauthorized");
+            return;
+        }
+
+        var conversation = await _conversationService.GetConversationByIdAsync(request.ConversationId);
+        if (conversation == null || !conversation.MemberIds.Contains(userId))
+        {
+            await Clients.Caller.SendAsync("Error", "Vous ne faites pas partie de cette conversation");
+            return;
+        }
+
+   
+        var recipientId = conversation.MemberIds.FirstOrDefault(id => id != userId);
+        
+        if (recipientId != null)
+        {
+            var senderProfile = await _userService.GetUserByIdAsync(userId);
+            var recipientProfile = await _userService.GetUserByIdAsync(recipientId);
+
+         
+            var senderDb = await _userService.GetRawUserByIdAsync(userId); // Voir étape 2 ci-dessous
+            var recipientDb = await _userService.GetRawUserByIdAsync(recipientId);
+
+            if (senderDb.BlockedUserIds.Contains(recipientId))
             {
-                await Clients.Caller.SendAsync("Error", "Unauthorized");
+                await Clients.Caller.SendAsync("Error", "Vous avez bloqué cet utilisateur.");
                 return;
             }
 
-            var conversation = await _conversationService.GetConversationByIdAsync(request.ConversationId);
-            if (conversation == null || !conversation.MemberIds.Contains(userId))
+            if (recipientDb.BlockedUserIds.Contains(userId))
             {
-                await Clients.Caller.SendAsync("Error", "You are not a member of this conversation");
+                await Clients.Caller.SendAsync("Error", "Vous ne pouvez pas envoyer de message à cet utilisateur.");
                 return;
             }
-
-            var message = await _messageService.CreateMessageAsync(
-                request.ConversationId,
-                userId,
-                request.CipherText,
-                request.Iv
-            );
-
-            await _conversationService.UpdateLastMessageAsync(request.ConversationId, message.Id);
-
-            var messageResponse = await _messageService.MapToResponseAsync(message);
-
-            await Clients.Group(request.ConversationId).SendAsync(
-                "ReceiveMessage",
-                new MessageNotification(messageResponse, request.ConversationId)
-            );
-
-            _logger.LogInformation($"Message {message.Id} sent to conversation {request.ConversationId}");
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error sending message");
-            await Clients.Caller.SendAsync("Error", "Failed to send message");
-        }
+
+        var message = await _messageService.CreateMessageAsync(
+            request.ConversationId,
+            userId,
+            request.CipherText,
+            request.Iv
+        );
+
+        await _conversationService.UpdateLastMessageAsync(request.ConversationId, message.Id);
+        var messageResponse = await _messageService.MapToResponseAsync(message);
+
+        await Clients.Group(request.ConversationId).SendAsync(
+            "ReceiveMessage",
+            new MessageNotification(messageResponse, request.ConversationId)
+        );
     }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Error sending message");
+        await Clients.Caller.SendAsync("Error", "Échec de l'envoi");
+    }
+}
 
     public async Task MarkMessagesAsRead(MarkMessagesReadRequest request)
     {
@@ -248,4 +270,4 @@ public class ChatHub : Hub
             _logger.LogError(ex, $"Error leaving conversation {conversationId}");
         }
     }
-}
+} 

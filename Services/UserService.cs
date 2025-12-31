@@ -98,4 +98,9 @@ public class UserService
 
         await _users.UpdateOneAsync(u => u.Id == userId, update);
     }
+
+    public async Task<User> GetRawUserByIdAsync(string userId)
+    {
+        return await _users.Find(u => u.Id == userId).FirstOrDefaultAsync();
+    }
 }
