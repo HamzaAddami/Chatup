@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Linq;
 using System.Security.Claims;
 using Chatup.DTOs;
 using Chatup.Enum;
@@ -13,7 +14,7 @@ public class ChatHub : Hub
 {
     private readonly MessageService _messageService;
     private readonly ConversationService _conversationService;
-    private readonly UserService _userService; 
+    private readonly UserService _userService;
     private readonly ILogger<ChatHub> _logger;
 
     private static readonly ConcurrentDictionary<string, ConcurrentBag<string>> UserConnections = new();
@@ -21,7 +22,7 @@ public class ChatHub : Hub
     public ChatHub(
         MessageService messageService,
         ConversationService conversationService,
-        UserService userService, 
+        UserService userService,
         ILogger<ChatHub> logger)
     {
         _messageService = messageService;
@@ -56,7 +57,6 @@ public class ChatHub : Hub
                 }
 
                 _logger.LogInformation($"User {userId} connected with connection {Context.ConnectionId}");
-
 
                 await Clients.Others.SendAsync("UserOnline", userId);
             }
@@ -109,69 +109,82 @@ public class ChatHub : Hub
     }
 
     public async Task SendMessage(SendMessageRequest request)
-{
-    try
     {
-        var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (userId == null)
+        try
         {
-            await Clients.Caller.SendAsync("Error", "Unauthorized");
-            return;
-        }
-
-        var conversation = await _conversationService.GetConversationByIdAsync(request.ConversationId);
-        if (conversation == null || !conversation.MemberIds.Contains(userId))
-        {
-            await Clients.Caller.SendAsync("Error", "Vous ne faites pas partie de cette conversation");
-            return;
-        }
-
-   
-        var recipientId = conversation.MemberIds.FirstOrDefault(id => id != userId);
-        
-        if (recipientId != null)
-        {
-            var senderProfile = await _userService.GetUserByIdAsync(userId);
-            var recipientProfile = await _userService.GetUserByIdAsync(recipientId);
-
-         
-            var senderDb = await _userService.GetRawUserByIdAsync(userId); // Voir étape 2 ci-dessous
-            var recipientDb = await _userService.GetRawUserByIdAsync(recipientId);
-
-            if (senderDb.BlockedUserIds.Contains(recipientId))
+            var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (userId == null)
             {
-                await Clients.Caller.SendAsync("Error", "Vous avez bloqué cet utilisateur.");
+                await Clients.Caller.SendAsync("Error", "Unauthorized");
                 return;
             }
 
-            if (recipientDb.BlockedUserIds.Contains(userId))
+            var conversation = await _conversationService.GetConversationByIdAsync(request.ConversationId);
+            if (conversation == null || !conversation.MemberIds.Contains(userId))
             {
-                await Clients.Caller.SendAsync("Error", "Vous ne pouvez pas envoyer de message à cet utilisateur.");
+                await Clients.Caller.SendAsync("Error", "Vous ne faites pas partie de cette conversation");
                 return;
             }
+
+            var recipientId = conversation.MemberIds.FirstOrDefault(id => id != userId);
+
+            if (recipientId != null)
+            {
+                var senderDb = await _userService.GetRawUserByIdAsync(userId);
+                var recipientDb = await _userService.GetRawUserByIdAsync(recipientId);
+
+                if (senderDb.BlockedUserIds.Contains(recipientId))
+                {
+                    await Clients.Caller.SendAsync("Error", "Vous avez bloqué cet utilisateur.");
+                    return;
+                }
+
+                if (recipientDb.BlockedUserIds.Contains(userId))
+                {
+                    await Clients.Caller.SendAsync("Error", "Vous ne pouvez pas envoyer de message à cet utilisateur.");
+                    return;
+                }
+            }
+
+            // NE PAS marquer les messages précédents comme lus automatiquement
+            // Laisser le client gérer cela explicitement
+
+            var message = await _messageService.CreateMessageAsync(
+                request.ConversationId,
+                userId,
+                request.CipherText,
+                request.Iv
+            );
+
+            await _conversationService.UpdateLastMessageAsync(request.ConversationId, message.Id);
+            var messageResponse = await _messageService.MapToResponseAsync(message);
+
+            // Envoyer le message à tous les membres du groupe
+            await Clients.Group(request.ConversationId).SendAsync(
+                "ReceiveMessage",
+                new MessageNotification(messageResponse, request.ConversationId)
+            );
+
+            // Envoyer le compteur mis à jour à TOUS les autres membres (pas le sender)
+            foreach (var memberId in conversation.MemberIds)
+            {
+                if (memberId != userId && UserConnections.TryGetValue(memberId, out var connections))
+                {
+                    var count = await _messageService.CountUnreadMessagesAsync(request.ConversationId, memberId);
+                    foreach (var connection in connections)
+                    {
+                        await Clients.Client(connection).SendAsync("UpdateUnreadCount",
+                            request.ConversationId, count);
+                    }
+                }
+            }
         }
-
-        var message = await _messageService.CreateMessageAsync(
-            request.ConversationId,
-            userId,
-            request.CipherText,
-            request.Iv
-        );
-
-        await _conversationService.UpdateLastMessageAsync(request.ConversationId, message.Id);
-        var messageResponse = await _messageService.MapToResponseAsync(message);
-
-        await Clients.Group(request.ConversationId).SendAsync(
-            "ReceiveMessage",
-            new MessageNotification(messageResponse, request.ConversationId)
-        );
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending message");
+            await Clients.Caller.SendAsync("Error", "Échec de l'envoi");
+        }
     }
-    catch (Exception ex)
-    {
-        _logger.LogError(ex, "Error sending message");
-        await Clients.Caller.SendAsync("Error", "Échec de l'envoi");
-    }
-}
 
     public async Task MarkMessagesAsRead(MarkMessagesReadRequest request)
     {
@@ -186,22 +199,32 @@ public class ChatHub : Hub
                 return;
             }
 
+            _logger.LogInformation($"User {userId} marking {request.MessageIds.Count} messages as read in conversation {request.ConversationId}");
+
             await _messageService.MarkMessagesAsReadAsync(request.MessageIds, userId);
 
-            foreach (var messageId in request.MessageIds)
-            {
-                await Clients.OthersInGroup(request.ConversationId).SendAsync(
-                    "MessageRead",
-                    new MessageStatusNotification(
-                        messageId,
-                        request.ConversationId,
-                        MessageStatus.READ.ToString(),
-                        new List<string> { userId }
-                    )
-                );
-            }
+            // Envoyer la notification de lecture à tous les membres du groupe
+            await Clients.Group(request.ConversationId).SendAsync(
+                "MessageRead",
+                new MessageStatusNotification(
+                    request.MessageIds.Last(),
+                    request.ConversationId,
+                    MessageStatus.READ.ToString(),
+                    new List<string> { userId }
+                )
+            );
 
-            _logger.LogInformation($"User {userId} marked {request.MessageIds.Count} messages as read");
+            // Envoyer le compteur mis à jour uniquement à l'utilisateur qui a marqué comme lu
+            if (UserConnections.TryGetValue(userId, out var connections))
+            {
+                var count = await _messageService.CountUnreadMessagesAsync(request.ConversationId, userId);
+                foreach (var connection in connections)
+                {
+                    await Clients.Client(connection).SendAsync("UpdateUnreadCount",
+                        request.ConversationId, count);
+                }
+                _logger.LogInformation($"Sent unread count {count} to user {userId} for conversation {request.ConversationId}");
+            }
         }
         catch (Exception ex)
         {
@@ -270,4 +293,30 @@ public class ChatHub : Hub
             _logger.LogError(ex, $"Error leaving conversation {conversationId}");
         }
     }
-} 
+
+    public async Task GetUnreadCounts()
+    {
+        try
+        {
+            var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (userId == null) return;
+
+            var conversations = await _conversationService.GetUserConversationsAsync(userId);
+            var unreadCounts = new Dictionary<string, int>();
+
+            foreach (var conversation in conversations)
+            {
+                var count = await _messageService.CountUnreadMessagesAsync(conversation.Id, userId);
+                unreadCounts[conversation.Id] = count;
+            }
+
+            _logger.LogInformation($"Sending unread counts to user {userId}: {string.Join(", ", unreadCounts.Select(kv => $"{kv.Key}={kv.Value}"))}");
+
+            await Clients.Caller.SendAsync("UnreadCounts", unreadCounts);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting unread counts");
+        }
+    }
+}
