@@ -122,7 +122,7 @@ public class ChatHub : Hub
             var conversation = await _conversationService.GetConversationByIdAsync(request.ConversationId);
             if (conversation == null || !conversation.MemberIds.Contains(userId))
             {
-                await Clients.Caller.SendAsync("Error", "Vous ne faites pas partie de cette conversation");
+                await Clients.Caller.SendAsync("Error", "u don r not member of this conversation");
                 return;
             }
 
@@ -135,19 +135,16 @@ public class ChatHub : Hub
 
                 if (senderDb.BlockedUserIds.Contains(recipientId))
                 {
-                    await Clients.Caller.SendAsync("Error", "Vous avez bloqué cet utilisateur.");
+                    await Clients.Caller.SendAsync("Error", "u blocked this user");
                     return;
                 }
 
                 if (recipientDb.BlockedUserIds.Contains(userId))
                 {
-                    await Clients.Caller.SendAsync("Error", "Vous ne pouvez pas envoyer de message à cet utilisateur.");
+                    await Clients.Caller.SendAsync("Error", "u can not send message to this user");
                     return;
                 }
             }
-
-            // NE PAS marquer les messages précédents comme lus automatiquement
-            // Laisser le client gérer cela explicitement
 
             var message = await _messageService.CreateMessageAsync(
                 request.ConversationId,
@@ -159,13 +156,11 @@ public class ChatHub : Hub
             await _conversationService.UpdateLastMessageAsync(request.ConversationId, message.Id);
             var messageResponse = await _messageService.MapToResponseAsync(message);
 
-            // Envoyer le message à tous les membres du groupe
             await Clients.Group(request.ConversationId).SendAsync(
                 "ReceiveMessage",
                 new MessageNotification(messageResponse, request.ConversationId)
             );
 
-            // Envoyer le compteur mis à jour à TOUS les autres membres (pas le sender)
             foreach (var memberId in conversation.MemberIds)
             {
                 if (memberId != userId && UserConnections.TryGetValue(memberId, out var connections))
@@ -182,7 +177,7 @@ public class ChatHub : Hub
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending message");
-            await Clients.Caller.SendAsync("Error", "Échec de l'envoi");
+            await Clients.Caller.SendAsync("Error", "send echec");
         }
     }
 
@@ -203,7 +198,6 @@ public class ChatHub : Hub
 
             await _messageService.MarkMessagesAsReadAsync(request.MessageIds, userId);
 
-            // Envoyer la notification de lecture à tous les membres du groupe
             await Clients.Group(request.ConversationId).SendAsync(
                 "MessageRead",
                 new MessageStatusNotification(
@@ -214,7 +208,6 @@ public class ChatHub : Hub
                 )
             );
 
-            // Envoyer le compteur mis à jour uniquement à l'utilisateur qui a marqué comme lu
             if (UserConnections.TryGetValue(userId, out var connections))
             {
                 var count = await _messageService.CountUnreadMessagesAsync(request.ConversationId, userId);
@@ -268,7 +261,7 @@ public class ChatHub : Hub
             var conversation = await _conversationService.GetConversationByIdAsync(conversationId);
             if (conversation == null || !conversation.MemberIds.Contains(userId))
             {
-                await Clients.Caller.SendAsync("Error", "You are not a member of this conversation");
+                await Clients.Caller.SendAsync("Error", "u r not a member of this conversation");
                 return;
             }
 
