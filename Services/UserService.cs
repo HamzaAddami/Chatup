@@ -1,9 +1,3 @@
-<<<<<<< HEAD
-﻿using Chatup.DTOs;
-using Chatup.Entities;
-using MongoDB.Driver;
-
-=======
 using Chatup.DTOs;
 using Chatup.Entities;
 using MongoDB.Bson;
@@ -11,32 +5,21 @@ using MongoDB.Driver;
 
 namespace Chatup.Services;
 
->>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be
 public class UserService
 {
     private readonly IMongoCollection<User> _users;
 
-<<<<<<< HEAD
-    public UserService(IMongoDatabase db)
-    {
-        _users = db.GetCollection<User>("Users");
-=======
     public UserService(IMongoDatabase database)
     {
         _users = database.GetCollection<User>("Users");
->>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be
     }
 
     public async Task<UserResponse?> GetUserByIdAsync(string userId)
     {
         var user = await _users.Find(u => u.Id == userId).FirstOrDefaultAsync();
         if (user == null) return null;
-<<<<<<< HEAD
-
-=======
         
->>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be
-        return new UserResponse(user.Id, user.PhoneNumber, user.Nickname, user.About, user.AvatarUrl);
+        return new UserResponse(user.Id, user.PhoneNumber, user.Email, user.Nickname, user.About, user.AvatarUrl);
     }
 
     public async Task UpdateProfileAsync(string userId, UpdateProfileRequest request)
@@ -44,7 +27,8 @@ public class UserService
         var update = Builders<User>.Update
             .Set(u => u.Nickname, request.Nickname)
             .Set(u => u.About, request.About)
-            .Set(u => u.AvatarUrl, request.AvatarUrl);
+            .Set(u => u.AvatarUrl, request.AvatarUrl)
+            .Set(u => u.Email, request.Email);
 
         await _users.UpdateOneAsync(u => u.Id == userId, update);
     }
@@ -52,15 +36,10 @@ public class UserService
     public async Task<(bool Success, string Message)> AddContactAsync(string userId, string contactPhoneNumber)
     {
         var contactUser = await _users.Find(u => u.PhoneNumber == contactPhoneNumber).FirstOrDefaultAsync();
-<<<<<<< HEAD
-
-=======
         
->>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be
         if (contactUser == null) return (false, "User with this phone number not found.");
         if (contactUser.Id == userId) return (false, "You cannot add yourself as a contact.");
 
-        // add contact ID to the list if it's not already there
         var update = Builders<User>.Update.AddToSet(u => u.ContactIds, contactUser.Id);
         await _users.UpdateOneAsync(u => u.Id == userId, update);
 
@@ -72,21 +51,16 @@ public class UserService
         var me = await _users.Find(u => u.Id == userId).FirstOrDefaultAsync();
         if (me == null || me.ContactIds.Count == 0) return new List<UserResponse>();
 
-        // find all users whose IDs are in my ContactIds list
         var filter = Builders<User>.Filter.In(u => u.Id, me.ContactIds);
         var contacts = await _users.Find(filter).ToListAsync();
 
-        return contacts.Select(u => new UserResponse(u.Id, u.PhoneNumber, u.Nickname, u.About, u.AvatarUrl)).ToList();
+        return contacts.Select(u => new UserResponse(u.Id, u.PhoneNumber, u.Email, u.Nickname, u.About, u.AvatarUrl)).ToList();
     }
 
     public async Task<(bool Success, string Message)> BlockUserAsync(string userId, string blockPhoneNumber)
     {
         var userToBlock = await _users.Find(u => u.PhoneNumber == blockPhoneNumber).FirstOrDefaultAsync();
-<<<<<<< HEAD
-
-=======
         
->>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be
         if (userToBlock == null) return (false, "User not found.");
         if (userToBlock.Id == userId) return (false, "You cannot block yourself.");
 
@@ -104,7 +78,7 @@ public class UserService
         var filter = Builders<User>.Filter.In(u => u.Id, me.BlockedUserIds);
         var blockedUsers = await _users.Find(filter).ToListAsync();
 
-        return blockedUsers.Select(u => new UserResponse(u.Id, u.PhoneNumber, u.Nickname, u.About, u.AvatarUrl)).ToList();
+        return blockedUsers.Select(u => new UserResponse(u.Id, u.PhoneNumber, u.Email, u.Nickname, u.About, u.AvatarUrl)).ToList();
     }
 
     public async Task<(bool Success, string Message)> UnblockUserAsync(string userId, string unblockPhoneNumber)
@@ -116,9 +90,8 @@ public class UserService
         await _users.UpdateOneAsync(u => u.Id == userId, update);
 
         return (true, "User unblocked successfully.");
-    }
-<<<<<<< HEAD
-
+    } 
+    
     public async Task UpdateUserOnlineStatusAsync(string userId, bool isOnline)
     {
         var update = Builders<User>.Update
@@ -131,7 +104,7 @@ public class UserService
     public async Task<User> GetRawUserByIdAsync(string userId)
     {
         return await _users.Find(u => u.Id == userId).FirstOrDefaultAsync();
-=======
+    }
     
     public async Task<List<UserResponse>> SearchUsersAsync(string query, string currentUserId)
     {
@@ -144,7 +117,7 @@ public class UserService
         );
 
         var users = await _users.Find(filter).Limit(20).ToListAsync();
-        return users.Select(u => new UserResponse(u.Id, u.PhoneNumber, u.Nickname, u.About, u.AvatarUrl)).ToList();
->>>>>>> fc15b791a7b488ee839afa2b10116487d7d9f5be
+        
+        return users.Select(u => new UserResponse(u.Id, u.PhoneNumber, u.Email, u.Nickname, u.About, u.AvatarUrl)).ToList();
     }
 }
