@@ -35,4 +35,18 @@ public class AuthController : ControllerBase
             return BadRequest(new { error = e.Message });
         }
     }
+    
+    [HttpPost("firebase-login")]
+    public async Task<IActionResult> FirebaseLogin([FromBody] FirebaseLoginRequest request)
+    {
+        try 
+        {
+            var response = await _authService.LoginWithFirebaseAsync(request.FirebaseToken);
+            return Ok(response);
+        }
+        catch (Exception e)
+        {
+            return Unauthorized(new { error = e.Message });
+        }
+    }
 }

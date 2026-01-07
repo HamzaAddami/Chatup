@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using Chatup.DTOs;
 using Chatup.Entities;
+using FirebaseAdmin.Auth;
 using Microsoft.IdentityModel.Tokens;
 using MongoDB.Driver;
 using StackExchange.Redis;
@@ -61,25 +62,70 @@ public class AuthService
 
     private string GenerateJwtToken(User user)
     {
-       var jwtSettings = _config.GetSection("JwtSettings");
-       var key = Encoding.ASCII.GetBytes(jwtSettings["SecretKey"]!);
+        var jwtSettings = _config.GetSection("JwtSettings");
+        var key = Encoding.ASCII.GetBytes(jwtSettings["SecretKey"]!);
 
-       var tokenDescriptor = new SecurityTokenDescriptor
-       {
-           Subject = new ClaimsIdentity([
-               new Claim(ClaimTypes.NameIdentifier, user.Id),
-               new Claim(ClaimTypes.MobilePhone, user.PhoneNumber)
-           ]),
+        var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.NameIdentifier, user.Id)
+        };
+
+        if (!string.IsNullOrEmpty(user.PhoneNumber))
+        {
+            claims.Add(new Claim(ClaimTypes.MobilePhone, user.PhoneNumber));
+        }
+
+        if (!string.IsNullOrEmpty(user.Email))
+        {
+            claims.Add(new Claim(ClaimTypes.Email, user.Email));
+        }
+
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Subject = new ClaimsIdentity(claims),
            
-           Expires = DateTime.UtcNow.AddMinutes(double.Parse(jwtSettings["ExpiryMinutes"]!)),
-           Issuer = jwtSettings["Issuer"],
-           Audience = jwtSettings["Audience"],
-           SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
-       };
+            Expires = DateTime.UtcNow.AddMinutes(double.Parse(jwtSettings["ExpiryMinutes"]!)),
+            Issuer = jwtSettings["Issuer"],
+            Audience = jwtSettings["Audience"],
+            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+        };
 
-       var tokenHandler = new JwtSecurityTokenHandler();
-       var token = tokenHandler.CreateToken(tokenDescriptor);
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var token = tokenHandler.CreateToken(tokenDescriptor);
        
-       return tokenHandler.WriteToken(token);
+        return tokenHandler.WriteToken(token);
+    }
+    
+    public async Task<AuthResponse> LoginWithFirebaseAsync(string firebaseIdToken)
+    {
+        FirebaseToken decodedToken;
+        
+        try
+        {
+            decodedToken = await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(firebaseIdToken);
+        }
+        catch (Exception)
+        {
+            throw new Exception("Invalid Firebase Token");
+        }
+
+        string uid = decodedToken.Uid;
+        string? email = decodedToken.Claims.ContainsKey("email") ? decodedToken.Claims["email"].ToString() : null;
+
+        var user = await _users.Find(u => u.Email == email).FirstOrDefaultAsync();
+
+        if (user == null)
+        {
+            user = new User 
+            { 
+                Email = email,
+                Nickname = email?.Split('@')[0]
+            };
+            await _users.InsertOneAsync(user);
+        }
+
+        var token = GenerateJwtToken(user);
+
+        return new AuthResponse(token, user.Id, user.Nickname, user.Email);
     }
 }

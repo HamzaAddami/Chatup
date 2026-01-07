@@ -6,6 +6,8 @@ using MongoDB.Driver;
 using sib_api_v3_sdk.Client;
 using Scalar.AspNetCore;
 using StackExchange.Redis;
+using FirebaseAdmin;
+using Google.Apis.Auth.OAuth2;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,6 +23,14 @@ var redis = ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionStr
 builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
 
 Configuration.Default.ApiKey.Add("api-key", builder.Configuration["Brevo:ApiKey"]);
+
+if (FirebaseApp.DefaultInstance == null)
+{
+    FirebaseApp.Create(new AppOptions()
+    {
+        Credential = GoogleCredential.FromFile("firebase-service-account.json")
+    });
+}
 
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<UserService>();
