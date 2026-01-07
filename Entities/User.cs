@@ -11,6 +11,8 @@ public class User
 
     public string PhoneNumber { get; set; } = null!;
 
+    public string? Email { get; set; }
+
     public string? Nickname { get; set; }
     public string? About { get; set; }
     public string? AvatarUrl { get; set; }

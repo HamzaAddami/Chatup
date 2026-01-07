@@ -79,4 +79,14 @@ public class UsersController : ControllerBase
 
         return Ok(new { message = result.Message });
     }
+
+    [HttpGet("search")]
+    public async Task<IActionResult> SearchUsers([FromQuery] string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return BadRequest(new { message = "Please enter a search term." });
+
+        var users = await _userService.SearchUsersAsync(query, CurrentUserId);
+        return Ok(users);
+    }
 }
